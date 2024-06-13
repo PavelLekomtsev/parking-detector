@@ -3,8 +3,16 @@ import pickle
 import cvzone
 import numpy as np
 
-with open("materials/CarParkPositions", "rb") as f:
-    position_list = pickle.load(f)
+def loadPositionList():
+    """
+    Загружает список позиций из файла в формате pickle
+
+    Returns:
+    position_list (list): Список загруженных позиций либо пустой список, если файл не найден.
+    """
+    with open("materials/CarParkPositions", "rb") as f:
+        position_list = pickle.load(f)
+    return position_list
 
 def rotateRectangle(rect_coords, angle, scale):
     """
@@ -25,6 +33,24 @@ def rotateRectangle(rect_coords, angle, scale):
     matrix_rotation = cv2.getRotationMatrix2D((center_x, center_y), angle, scale)
     new_rect = cv2.transform(np.array([rect_coords]), matrix_rotation)[0]
     return new_rect
+
+def drawRotatedRectangle(img, new_rectangle, color, thickness):
+    """
+    Отрисовывает повернутый прямоугольник на изображении.
+
+    Args:
+    img (numpy.ndarray): Изображение, на котором будет отрисован прямоугольник.
+    new_rectangle (numpy.ndarray): Координаты точек повернутого прямоугольника.
+    color (list): Цвет отрисовки.
+    thickness (int): Толщина отрисовки.
+
+    Returns:
+    None
+    """
+    for i in range(4):
+        cv2.line(img, (int(new_rectangle[i][0]), int(new_rectangle[i][1])),
+                 (int(new_rectangle[(i + 1) % 4][0]), int(new_rectangle[(i + 1) % 4][1])), color, thickness)
+
 
 def checkParkingSpace(imgProcess):
     """
@@ -93,9 +119,7 @@ def checkParkingSpace(imgProcess):
                                 [pos[0], pos[1] + height - height_offset]])
         new_rectangle = rotateRectangle(rect_coords, angle, scale)
 
-        for i in range(4):
-            cv2.line(img, (int(new_rectangle[i][0]), int(new_rectangle[i][1])),
-                     (int(new_rectangle[(i + 1) % 4][0]), int(new_rectangle[(i + 1) % 4][1])), color, thickness)
+        drawRotatedRectangle(img, new_rectangle, color, thickness)
 
         cvzone.putTextRect(img, str(count), (x, y + height - height_offset - 8), scale=1,
                            thickness=2, offset=0, colorR=color)
@@ -104,27 +128,30 @@ def checkParkingSpace(imgProcess):
                        thickness=3, offset=10, colorR=(0, 200, 0))
 
 
-cap = cv2.VideoCapture("materials/ParkVideo.mp4")
-borders = (930, 475, 530)
-width, height = 95, 40
+if __name__ == "__main__":
+    position_list = loadPositionList()
+    borders = (930, 475, 530)
+    width, height = 95, 40
 
-while True:
-    success, img = cap.read()
+    cap = cv2.VideoCapture("materials/ParkVideo.mp4")
 
-    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img_blur = cv2.GaussianBlur(img_gray, (3, 3), 1)
-    img_threshold = cv2.adaptiveThreshold(img_blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                          cv2.THRESH_BINARY_INV, 25, 12)
-    img_median = cv2.medianBlur(img_threshold, 3)
-    kernel = np.ones((3, 3), np.uint8)
-    img_dilate = cv2.dilate(img_median, kernel, iterations = 1)
+    while True:
+        success, img = cap.read()
 
-    checkParkingSpace(img_dilate)
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img_blur = cv2.GaussianBlur(img_gray, (3, 3), 1)
+        img_threshold = cv2.adaptiveThreshold(img_blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                              cv2.THRESH_BINARY_INV, 25, 12)
+        img_median = cv2.medianBlur(img_threshold, 3)
+        kernel = np.ones((3, 3), np.uint8)
+        img_dilate = cv2.dilate(img_median, kernel, iterations = 1)
 
-    cv2.imshow("Video", img)
-    # cv2.imshow("Image Blur", img_blur)
-    # cv2.imshow("Image Threshhold", img_dilate)
-    key = cv2.waitKey(10)
-    if key == ord('r'):
-        cv2.destroyAllWindows()
-        break
+        checkParkingSpace(img_dilate)
+
+        cv2.imshow("Video", img)
+        # cv2.imshow("Image Blur", img_blur)
+        # cv2.imshow("Image Threshhold", img_dilate)
+        key = cv2.waitKey(10)
+        if key == ord('r'):
+            cv2.destroyAllWindows()
+            break
